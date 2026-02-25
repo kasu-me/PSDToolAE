@@ -88,7 +88,7 @@ function moveKeyframesToCurrentTime() {
 	});
 }
 function removeKeyframesAtCurrentTime() {
-	if (!confirm("現在の時間にあるキーフレームを全階層から削除しますか？\nこの操作は元に戻せません。")) {
+	if (!confirm("現在の時間にあるキーフレームを全階層から削除しますか？")) {
 		return;
 	}
 
