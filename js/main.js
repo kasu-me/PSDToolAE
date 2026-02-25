@@ -130,7 +130,7 @@ function loadPresets(compId) {
 			var nameSpan = document.createElement('span');
 			nameSpan.className = 'preset-name';
 			nameSpan.textContent = p.name;
-			nameSpan.onclick = function () { applyPreset(p.data); };
+			nameSpan.onclick = function (e) { applyPreset(p.data, e); };
 			item.appendChild(nameSpan);
 
 			// Rename Button
@@ -231,9 +231,22 @@ function deletePreset(compId, index) {
 	}
 }
 
-function applyPreset(savedData) {
+function applyPreset(savedData, e) {
 	if (!g_lastCompId) return;
 
+	// Ctrlキーが押されている場合の特別処理
+	if (e && e.ctrlKey) {
+		csInterface.evalScript('moveTimeToSelectedLayerInPoint()', function (res) {
+			// 移動処理が終わったら続きを実行
+			// 選択がない場合は移動しないだけで通常動作
+			continueApplyPreset(savedData);
+		});
+	} else {
+		continueApplyPreset(savedData);
+	}
+}
+
+function continueApplyPreset(savedData) {
 	// 1. まず最新の階層構造を取得する (インデックスのズレ防止)
 	csInterface.evalScript('getHierarchy()', function (res) {
 		var hierarchy = JSON.parse(res);

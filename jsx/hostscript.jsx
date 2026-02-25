@@ -740,3 +740,16 @@ function moveKeyframes() {
 	}
 }
 
+function moveTimeToSelectedLayerInPoint() {
+	var comp = app.project.activeItem;
+	if (!comp || !(comp instanceof CompItem)) {
+		return "false";
+	}
+	var selectedLayers = comp.selectedLayers;
+	if (selectedLayers.length > 0) {
+		comp.time = selectedLayers[0].inPoint;
+		return "true";
+	}
+	return "false";
+}
+
