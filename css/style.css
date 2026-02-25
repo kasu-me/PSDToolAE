@@ -347,3 +347,9 @@ input[type="radio"] {
 .storage-import:hover {
 	background-color: var(--btn-hover);
 }
+
+#btn-move-keys:disabled {
+	cursor: not-allowed;
+	pointer-events: none;
+	opacity: 0.5;
+}

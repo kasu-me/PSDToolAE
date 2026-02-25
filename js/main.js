@@ -26,21 +26,29 @@ document.getElementById('btn-get-keys').addEventListener('click', getKeyframesFr
 document.getElementById('btn-move-keys').addEventListener('click', moveKeyframesToCurrentTime);
 document.getElementById('btn-delete-keys').addEventListener('click', removeKeyframesAtCurrentTime);
 
+// 初期状態: moveボタンは無効化
+var btnMoveKeys = document.getElementById('btn-move-keys');
+if (btnMoveKeys) btnMoveKeys.disabled = true;
+
 function getKeyframesFromActiveComp() {
 	var statusDiv = document.getElementById('status-keyframe');
 	statusDiv.textContent = "取得中...";
 	statusDiv.style.color = "#eeeeee";
 	statusDiv.style.fontWeight = "normal";
 
+	if (btnMoveKeys) btnMoveKeys.disabled = true;
+
 	csInterface.evalScript('getKeyframesFromActiveComp()', function (res) {
 		if (res === "true") {
 			statusDiv.textContent = "キーフレームを記録しました";
 			statusDiv.style.color = "#4CAF50"; // 柔らかめの緑
 			statusDiv.style.fontWeight = "bold";
+			if (btnMoveKeys) btnMoveKeys.disabled = false;
 		} else {
 			statusDiv.textContent = "キーフレームが見つかりませんでした";
 			statusDiv.style.color = "#ff4444"; // 鮮やかな赤
 			statusDiv.style.fontWeight = "bold";
+			if (btnMoveKeys) btnMoveKeys.disabled = true;
 		}
 	});
 }
@@ -64,6 +72,7 @@ function moveKeyframesToCurrentTime() {
 
 		if (res === "true" || resultObj.status === "success") {
 			statusDiv.textContent = "移動完了 (メモリ消去済)";
+			if (btnMoveKeys) btnMoveKeys.disabled = true;
 			statusDiv.style.color = "#4CAF50"; // 柔らかめの緑
 			statusDiv.style.fontWeight = "bold";
 			setTimeout(function () {
@@ -72,6 +81,7 @@ function moveKeyframesToCurrentTime() {
 			}, 3000);
 		} else {
 			statusDiv.textContent = resultObj.message ? resultObj.message : "記録中のキーフレームがありません";
+			if (btnMoveKeys) btnMoveKeys.disabled = true;
 			statusDiv.style.color = "#ff4444"; // 鮮やかな赤
 			statusDiv.style.fontWeight = "bold";
 		}
