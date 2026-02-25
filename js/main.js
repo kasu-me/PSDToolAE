@@ -24,6 +24,7 @@ document.getElementById('btn-import-preset').addEventListener('click', importPre
 // Keyframe Operation Events
 document.getElementById('btn-get-keys').addEventListener('click', getKeyframesFromActiveComp);
 document.getElementById('btn-move-keys').addEventListener('click', moveKeyframesToCurrentTime);
+document.getElementById('btn-delete-keys').addEventListener('click', removeKeyframesAtCurrentTime);
 
 function getKeyframesFromActiveComp() {
 	var statusDiv = document.getElementById('status-keyframe');
@@ -76,6 +77,43 @@ function moveKeyframesToCurrentTime() {
 		}
 	});
 }
+function removeKeyframesAtCurrentTime() {
+	if (!confirm("現在の時間にあるキーフレームを全階層から削除しますか？\nこの操作は元に戻せません。")) {
+		return;
+	}
+
+	var statusDiv = document.getElementById('status-keyframe');
+	statusDiv.textContent = "削除中...";
+	statusDiv.style.color = "#eeeeee";
+	statusDiv.style.fontWeight = "normal";
+
+	csInterface.evalScript('removeKeyframesAtCurrentTime()', function (res) {
+		var resultObj = { count: 0, status: "false" };
+		try {
+			if (res.startsWith("{")) {
+				resultObj = JSON.parse(res);
+			} else {
+				// Fallback for simple boolean string responses (though hostscript creates JSON)
+				if (res === "true") resultObj.status = "success";
+			}
+		} catch (e) { }
+
+		if (resultObj.status === "success") {
+			statusDiv.textContent = "削除完了 (" + resultObj.count + "個)";
+			statusDiv.style.color = "#ff4444";
+			statusDiv.style.fontWeight = "bold";
+			setTimeout(function () {
+				statusDiv.textContent = "";
+				statusDiv.style.fontWeight = "normal";
+			}, 3000);
+		} else {
+			statusDiv.textContent = resultObj.message ? resultObj.message : "削除に失敗、またはキーが見つかりません";
+			statusDiv.style.color = "#ff4444";
+			statusDiv.style.fontWeight = "bold";
+		}
+	});
+}
+
 
 // Storage Management
 var modal = document.getElementById("storage-modal");

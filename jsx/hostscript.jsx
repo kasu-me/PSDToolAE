@@ -315,6 +315,101 @@ function moveKeyframe(prop, keyIndex, newTime) {
 	}
 }
 
+
+function removeKeyframesAtCurrentTime() {
+	var undoName = "Remove Keyframes at Current Time";
+	var comp = app.project.activeItem;
+	if (!comp || !(comp instanceof CompItem)) {
+		return JSON.stringify({ status: "error", message: "コンポジションがアクティブではありません" });
+	}
+
+	app.beginUndoGroup(undoName);
+
+	try {
+		var counter = { count: 0 };
+		removeKeysRecursive(comp, comp.time, counter);
+
+		if (counter.count > 0) {
+			// Undoグループを閉じるには正常終了後に閉じる必要があるが、
+			// エラー時はfinallyなどで閉じられるようにすべきか、
+			// あるいはここで閉じてから結果を返す。
+			app.endUndoGroup();
+			return JSON.stringify({ status: "success", count: counter.count });
+		} else {
+			// 何も削除しなかった場合でもUndo履歴に残したくない場合はキャンセル扱いにする手もあるが、
+			// ユーザーが「削除を実行したが何もなかった」とわかるようにそのまま終了する。
+			app.endUndoGroup();
+			return JSON.stringify({ status: "error", message: "削除対象のキーフレームが見つかりませんでした" });
+		}
+	} catch (e) {
+		app.endUndoGroup(); // エラー時も閉じる
+		return JSON.stringify({ status: "error", message: "Fatal Error: " + e.toString() });
+	}
+}
+
+function removeKeysRecursive(comp, time, counter) {
+	for (var i = 1; i <= comp.numLayers; i++) {
+		var layer = comp.layer(i);
+
+		// 現在のレイヤーのプロパティからキーを削除
+		removeKeysFromLayer(layer, time, counter);
+
+		// If it's a pre-comp, recurse
+		if (layer.source instanceof CompItem) {
+			// Calculate inner time for the pre-comp
+			if (layer.timeRemapEnabled) {
+				// タイムリマップ有効の場合、現在時刻でのタイムリマップ値を取得して再帰
+				var trProp = layer.property("Time Remap");
+				if (trProp) {
+					var mappedTime = trProp.valueAtTime(time, false);
+					removeKeysRecursive(layer.source, mappedTime, counter);
+				}
+			} else {
+				// 通常の時間計算
+				// comp time -> layer local time -> source comp time
+				// localTime = (compTime - startTime) * stretchFactor
+				// stretch: 100 means 100% speed. stretch 200 means 50% speed (2x duration).
+				// AE Scripting Guide: layer.stretch is a percentage.
+				// But formula is specific.
+				// Correct formula: (time - layer.startTime) * (100 / layer.stretch)
+				var localTime = (time - layer.startTime) * (100 / layer.stretch);
+				removeKeysRecursive(layer.source, localTime, counter);
+			}
+		}
+	}
+}
+
+function removeKeysFromLayer(propGroup, time, counter) {
+	var numProps = propGroup.numProperties;
+	if (!numProps) return;
+
+	for (var i = 1; i <= numProps; i++) {
+		var prop = propGroup.property(i);
+
+		if (prop.propertyType === PropertyType.PROPERTY) {
+			if (prop.numKeys > 0) {
+				// nearestKeyIndex returns index of key closest to time
+				var nearestIndex = prop.nearestKeyIndex(time);
+
+				// nearestKeyIndex can return 0 if no keys, but numKeys > 0 checked above.
+				// It returns a valid index 1..numKeys
+				if (nearestIndex > 0 && nearestIndex <= prop.numKeys) {
+					var keyTime = prop.keyTime(nearestIndex);
+
+					// Floating point tolerance
+					if (Math.abs(keyTime - time) < 0.0001) {
+						prop.removeKey(nearestIndex);
+						counter.count++;
+						// 同じ時間に重複キーは存在しないはずなので、このプロパティでの削除は完了
+					}
+				}
+			}
+		} else if (prop.propertyType === PropertyType.NAMED_GROUP || prop.propertyType === PropertyType.INDEXED_GROUP) {
+			removeKeysFromLayer(prop, time, counter);
+		}
+	}
+}
+
 function getHierarchy() {
 	var comp = app.project.activeItem;
 	if (!(comp instanceof CompItem)) {
