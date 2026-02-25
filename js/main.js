@@ -362,30 +362,10 @@ function continueApplyPreset(savedData) {
 		renderTree(hierarchy);
 		if (hierarchy.id) loadPresets(hierarchy.id);
 
-		// 5. AEへ送信 (Compごとに送信)
-		// applyBatchVisibility はまだ一回のUndoGroupに対応していないので、
-		// 複数回呼ぶとUndoが分かれてしまう可能性があるが、まずは機能修正優先。
-		// ホストスクリプト側でまとめて処理するよう変更するのがベストだが、今回はループ呼び出しで対応。
-
-		var compIds = Object.keys(batchDataByComp);
-
-		// 連続呼び出し用チェーン関数
-		function runBatch(index) {
-			if (index >= compIds.length) return;
-			var cId = compIds[index];
-			var items = batchDataByComp[cId];
-			if (items.length === 0) {
-				runBatch(index + 1);
-				return;
-			}
-
-			csInterface.evalScript('applyBatchVisibility(' + cId + ', ' + JSON.stringify(items) + ')', function (res) {
-				console.log("Preset applied for comp " + cId + ": " + res);
-				runBatch(index + 1);
-			});
-		}
-
-		runBatch(0);
+		// 5. AEへ送信 (全コンポジションをまとめて1Undo)
+		csInterface.evalScript('applyGlobalBatchVisibility(' + JSON.stringify(batchDataByComp) + ')', function (res) {
+			console.log("Preset applied globally: " + res);
+		});
 	});
 }
 
