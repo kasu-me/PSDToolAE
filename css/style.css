@@ -1,0 +1,349 @@
+:root {
+	--btn-bg: #383838;
+	--btn-fg: #f0f0f0;
+	--btn-border: #505050;
+	--btn-hover: #484848;
+	--item-hover: #2a2a2a;
+}
+
+body {
+	background-color: #232323;
+	color: #cccccc;
+	font-family: "Segoe UI", sans-serif;
+	font-size: 13px;
+	margin: 0;
+	padding: 10px;
+	display: flex;
+	flex-direction: column;
+	height: 100vh;
+	box-sizing: border-box;
+}
+
+#controls {
+	flex: 0 0 auto;
+}
+
+#main-area {
+	flex: 1 1 auto;
+	display: flex;
+	overflow: hidden;
+	margin-top: 10px;
+	border-top: 1px solid var(--btn-border);
+}
+
+#tree-section {
+	flex: 1;
+	overflow-y: auto;
+	padding-right: 5px;
+	border-right: 1px solid var(--btn-border);
+}
+
+#preset-section {
+	width: 150px;
+	flex: 0 0 auto;
+	display: flex;
+	flex-direction: column;
+	padding-left: 5px;
+	padding-right: 5px;
+	background-color: rgba(0, 0, 0, 0.1);
+}
+
+#tree-container {
+	padding-top: 10px;
+}
+
+.preset-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 5px;
+	font-weight: bold;
+	border-bottom: 1px solid var(--btn-border);
+}
+
+#preset-list {
+	flex: 1;
+	overflow-y: auto;
+	padding: 5px 0;
+}
+
+.preset-item {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 4px 6px;
+	cursor: pointer;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.preset-item:hover {
+	background-color: var(--item-hover);
+}
+
+.preset-name {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	flex-grow: 1;
+}
+
+.preset-rename,
+.preset-delete {
+	width: 16px;
+	height: 16px;
+	line-height: 16px;
+	text-align: center;
+	color: #999;
+	margin-left: 4px;
+	border-radius: 3px;
+	font-size: 10px;
+	/* アイコンサイズ調整 */
+}
+
+.preset-rename:hover,
+.preset-delete:hover {
+	background-color: #555;
+	color: #fff;
+}
+
+button {
+	background-color: var(--btn-bg);
+	color: var(--btn-fg);
+	border: 1px solid var(--btn-border);
+	padding: 5px 10px;
+	cursor: pointer;
+	width: 100%;
+	margin-bottom: 10px;
+}
+
+button:hover {
+	background-color: var(--btn-hover);
+}
+
+ul {
+	list-style-type: none;
+	padding-left: 20px;
+	margin: 0;
+}
+
+.tree-root {
+	padding-left: 0;
+}
+
+li {
+	margin: 2px 0;
+}
+
+.item-container {
+	display: flex;
+	align-items: center;
+	cursor: default;
+}
+
+.item-container:hover {
+	background-color: var(--item-hover);
+}
+
+.toggle-icon {
+	width: 16px;
+	text-align: center;
+	cursor: pointer;
+	margin-right: 4px;
+	font-size: 10px;
+}
+
+.layer-icon {
+	width: 16px;
+	height: 16px;
+	margin-right: 5px;
+	display: inline-block;
+	background-size: contain;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+	margin-right: 6px;
+}
+
+.layer-name {
+	flex-grow: 1;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* 簡易アイコン（CSSで表現） */
+.layer-icon::before {
+	content: "📄";
+}
+
+.layer-icon.folder-icon::before {
+	content: "📁";
+}
+
+.locked {
+	color: #eebb00;
+}
+
+/* Modal Styles */
+.modal {
+	display: none;
+	/* Hidden by default */
+	position: fixed;
+	/* Stay in place */
+	z-index: 100;
+	/* Sit on top */
+	left: 0;
+	top: 0;
+	width: 100%;
+	/* Full width */
+	height: 100%;
+	/* Full height */
+	overflow: auto;
+	/* Enable scroll if needed */
+	background-color: rgb(0, 0, 0);
+	/* Fallback color */
+	background-color: rgba(0, 0, 0, 0.6);
+	/* Black w/ opacity */
+}
+
+.modal-content {
+	background-color: var(--btn-bg);
+	color: var(--btn-fg);
+	margin: 15% auto;
+	/* 15% from the top and centered */
+	padding: 20px;
+	border: 1px solid var(--btn-border);
+	width: 80%;
+	/* Could be more or less, depending on screen size */
+	box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.4);
+	display: flex;
+	flex-direction: column;
+	max-height: 70%;
+}
+
+.modal-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	border-bottom: 1px solid var(--btn-border);
+	padding-bottom: 10px;
+	margin-bottom: 10px;
+}
+
+.modal-header h3 {
+	margin: 0;
+	font-size: 14px;
+	color: var(--btn-fg);
+}
+
+.close-modal {
+	color: #aaa;
+	font-size: 24px;
+	font-weight: bold;
+	cursor: pointer;
+}
+
+.close-modal:hover,
+.close-modal:focus {
+	color: var(--btn-fg);
+	text-decoration: none;
+	cursor: pointer;
+}
+
+#storage-list-container {
+	overflow-y: auto;
+	flex: 1;
+}
+
+.storage-item {
+	background-color: rgba(255, 255, 255, 0.05);
+	margin-bottom: 5px;
+	padding: 8px;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	border-radius: 4px;
+	border: 1px solid var(--btn-border);
+}
+
+.storage-item:hover {
+	background-color: rgba(255, 255, 255, 0.1);
+	border-color: var(--btn-hover);
+}
+
+.storage-info {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	margin-right: 10px;
+}
+
+.storage-name {
+	font-size: 13px;
+	font-weight: bold;
+	color: var(--btn-fg);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.storage-path {
+	font-size: 10px;
+	color: var(--btn-fg);
+	opacity: 0.7;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	direction: rtl;
+	/* Trim start for paths */
+	text-align: left;
+	margin-bottom: 2px;
+}
+
+.storage-comp {
+	font-size: 11px;
+	color: var(--btn-fg);
+	opacity: 0.5;
+}
+
+.storage-comp {
+	font-size: 11px;
+}
+
+.storage-actions {
+	display: flex;
+	gap: 5px;
+	flex-shrink: 0;
+}
+
+.storage-delete,
+.storage-import {
+	padding: 4px 10px;
+	font-size: 11px;
+	cursor: pointer;
+	border-radius: 3px;
+	width: auto;
+	margin-bottom: 0;
+	white-space: nowrap;
+}
+
+.storage-delete {
+	background-color: #800;
+	color: white;
+	border: 1px solid #a00;
+}
+
+.storage-delete:hover {
+	background-color: #a00;
+}
+
+.storage-import {
+	background-color: var(--btn-bg);
+	color: var(--btn-fg);
+	border: 1px solid var(--btn-border);
+}
+
+.storage-import:hover {
+	background-color: var(--btn-hover);
+}

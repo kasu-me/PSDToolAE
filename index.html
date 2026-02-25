@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<link rel="stylesheet" href="css/style.css">
+	<title>PSD Tool AE</title>
+</head>
+
+<body>
+	<div id="controls">
+		<button id="btn-reload">再読み込み</button>
+		<button id="btn-collapse-all" style="margin-top: 5px; font-size: 0.9em;">すべてのフォルダを畳む</button>
+
+		<!-- Keyframe Operation Controls -->
+		<div class="keyframe-section" style="margin-top: 10px;">
+			<div class="section-label" style="font-weight:600; margin-bottom:6px;">キーフレーム操作</div>
+			<div style="display: flex; gap: 5px; align-items: center;">
+				<button id="btn-get-keys" style="flex: 1;">取得</button>
+				<button id="btn-move-keys" style="flex: 1;">移動</button>
+			</div>
+			<div id="status-keyframe" style="margin-top: 5px; color: #888; font-size: 0.9em; min-height: 1.2em;"></div>
+		</div>
+	</div>
+
+	<div id="main-area">
+		<div id="tree-section">
+			<div id="tree-container">
+				<!-- Tree will be rendered here -->
+				<p style="text-align:center; color:#888;">コンポジションを読み込んでください</p>
+			</div>
+		</div>
+		<div id="preset-section">
+			<div class="preset-header">
+				<span>Presets</span>
+				<div style="display:flex;">
+					<button id="btn-import-preset" title="Import"
+						style="width:auto; padding:2px 6px; margin-right:2px;">In</button>
+					<button id="btn-export-preset" title="Export"
+						style="width:auto; padding:2px 6px; margin-right:2px;">Ex</button>
+					<button id="btn-add-preset" title="Add" style="width:auto; padding:2px 8px;">+</button>
+				</div>
+			</div>
+			<div id="preset-list">
+				<!-- Presets will be rendered here -->
+			</div>
+			<button id="btn-manage-storage"
+				style="margin-top: 10px; width: 100%; font-size: 0.8em; opacity: 0.7;">プリセット整理</button>
+		</div>
+
+		<!-- Storage Management Modal -->
+		<div id="storage-modal" class="modal">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h3>保存済みプリセット管理</h3>
+					<span class="close-modal">&times;</span>
+				</div>
+				<div id="storage-list-container">
+					<!-- List items will be injected here -->
+				</div>
+			</div>
+		</div>
+
+		<script src="js/CSInterface.js"></script>
+		<script src="js/main.js"></script>
+</body>
+
+</html>
