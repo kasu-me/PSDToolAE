@@ -108,7 +108,7 @@ function importPSD() {
 
 var g_storedKeyframes = []; // Array of { prop: Property, keyIndex: number, layerChain: Array<Layer> }
 
-function getKeyframesFromActiveComp() {
+function getKeyframesFromActiveComp(isShift) {
 	try {
 		g_storedKeyframes = [];
 		var comp = app.project.activeItem;
@@ -118,7 +118,7 @@ function getKeyframesFromActiveComp() {
 
 		// 再帰的にキーフレームを収集
 		// rootCompTime, layerChain=[]
-		collectKeysForMove(comp, comp.time, []);
+		collectKeysForMove(comp, comp.time, [], isShift);
 
 		if (g_storedKeyframes.length > 0) {
 			return "true";
@@ -130,13 +130,13 @@ function getKeyframesFromActiveComp() {
 	}
 }
 
-function collectKeysForMove(comp, time, layerChain) {
+function collectKeysForMove(comp, time, layerChain, isShift) {
 	for (var i = 1; i <= comp.numLayers; i++) {
 		var layer = comp.layer(i);
 
 		// Scan properties of this layer first using current comp time
 		// Pass layerChain from parent context (do not include current layer yet)
-		scanPropsForMove(layer, time, layerChain);
+		scanPropsForMove(layer, time, layerChain, isShift);
 
 		// If it's a pre-comp, recurse
 		if (layer.source instanceof CompItem) {
@@ -148,12 +148,12 @@ function collectKeysForMove(comp, time, layerChain) {
 			var newChain = layerChain.concat([]); // shallow copy
 			newChain.push(layer);
 
-			collectKeysForMove(layer.source, localTime, newChain);
+			collectKeysForMove(layer.source, localTime, newChain, isShift);
 		}
 	}
 }
 
-function scanPropsForMove(propGroup, time, layerChain) {
+function scanPropsForMove(propGroup, time, layerChain, isShift) {
 	// Traverse properties
 	var numProps = propGroup.numProperties;
 	if (!numProps) return;
@@ -163,29 +163,60 @@ function scanPropsForMove(propGroup, time, layerChain) {
 
 		if (prop.propertyType === PropertyType.PROPERTY) {
 			if (prop.numKeys > 0) {
-				// Check if there is a keyframe at 'time'
-				var nearestIndex = prop.nearestKeyIndex(time);
+				if (isShift) {
+					// 現在の時間以降の全てのキーを取得
+					for (var k = 1; k <= prop.numKeys; k++) {
+						if (prop.keyTime(k) >= time - 0.0001) {
+							g_storedKeyframes.push({
+								property: prop,
+								keyIndex: k,
+								layerChain: layerChain
+							});
+						}
+					}
+				} else {
+					// Check if there is a keyframe at 'time'
+					var nearestIndex = prop.nearestKeyIndex(time);
 
-				// If no keys, nearestKeyIndex might return 0 or 1 depending on AE version/state, check bounds
-				if (nearestIndex > 0 && nearestIndex <= prop.numKeys) {
-					var keyTime = prop.keyTime(nearestIndex);
+					// If no keys, nearestKeyIndex might return 0 or 1 depending on AE version/state, check bounds
+					if (nearestIndex > 0 && nearestIndex <= prop.numKeys) {
+						var keyTime = prop.keyTime(nearestIndex);
 
-					// Tolerance for floating point comparison (e.g. 1/frameRate is too large, use small epsilon)
-					// 0.0001 is usually enough (1/30 frame is ~0.033)
-					if (Math.abs(keyTime - time) < 0.0001) {
-						// Found a keyframe!
-						g_storedKeyframes.push({
-							property: prop,
-							keyIndex: nearestIndex,
-							layerChain: layerChain
-						});
+						// Tolerance for floating point comparison (e.g. 1/frameRate is too large, use small epsilon)
+						// 0.0001 is usually enough (1/30 frame is ~0.033)
+						if (Math.abs(keyTime - time) < 0.0001) {
+							// Found a keyframe!
+							g_storedKeyframes.push({
+								property: prop,
+								keyIndex: nearestIndex,
+								layerChain: layerChain
+							});
+						}
 					}
 				}
 			}
 		} else if (prop.propertyType === PropertyType.NAMED_GROUP || prop.propertyType === PropertyType.INDEXED_GROUP) {
-			scanPropsForMove(prop, time, layerChain);
+			scanPropsForMove(prop, time, layerChain, isShift);
 		}
 	}
+}
+
+function localTimeToRootTime(localTime, layerChain) {
+	var time = localTime;
+	for (var j = layerChain.length - 1; j >= 0; j--) {
+		var layer = layerChain[j];
+		time = time * (layer.stretch / 100) + layer.startTime;
+	}
+	return time;
+}
+
+function rootTimeToLocalTime(rootTime, layerChain) {
+	var targetTime = rootTime;
+	for (var j = 0; j < layerChain.length; j++) {
+		var layer = layerChain[j];
+		targetTime = (targetTime - layer.startTime) * (100 / layer.stretch);
+	}
+	return targetTime;
 }
 
 function moveKeyframesToCurrentTime() {
@@ -200,41 +231,95 @@ function moveKeyframesToCurrentTime() {
 		}
 
 		var rootTime = rootComp.time;
+
+		var minRootTime = null;
+		var keyDataList = [];
+		for (var i = 0; i < g_storedKeyframes.length; i++) {
+			var item = g_storedKeyframes[i];
+			var prop = item.property;
+			if (!prop.canVaryOverTime) continue;
+
+			var oldLocalTime = prop.keyTime(item.keyIndex);
+			var oldRootTime = localTimeToRootTime(oldLocalTime, item.layerChain);
+
+			if (minRootTime === null || oldRootTime < minRootTime) {
+				minRootTime = oldRootTime;
+			}
+
+			keyDataList.push({
+				originalItem: item,
+				oldRootTime: oldRootTime
+			});
+		}
+
+		if (keyDataList.length === 0) {
+			return JSON.stringify({ status: "error", message: "移動可能なキーフレームがありません" });
+		}
+
+		var offsetRootTime = rootTime - minRootTime;
+
+		var groupedProps = [];
+		for (var i = 0; i < keyDataList.length; i++) {
+			var data = keyDataList[i];
+			var item = data.originalItem;
+			var prop = item.property;
+
+			var newRootTime = data.oldRootTime + offsetRootTime;
+			var newLocalTime = rootTimeToLocalTime(newRootTime, item.layerChain);
+
+			var kAttr = extractKeyframeData(prop, item.keyIndex);
+			if (!kAttr) continue;
+
+			kAttr.newLocalTime = newLocalTime;
+			kAttr.oldKeyIndex = item.keyIndex;
+
+			var foundGroup = null;
+			for (var g = 0; g < groupedProps.length; g++) {
+				if (groupedProps[g].prop === prop) {
+					foundGroup = groupedProps[g];
+					break;
+				}
+			}
+			if (!foundGroup) {
+				foundGroup = { prop: prop, keys: [] };
+				groupedProps.push(foundGroup);
+			}
+			foundGroup.keys.push(kAttr);
+		}
+
 		var successCount = 0;
 		var failCount = 0;
 		var details = "";
 
 		app.beginUndoGroup("Move Keyframes via Script");
 
-		for (var i = 0; i < g_storedKeyframes.length; i++) {
-			var item = g_storedKeyframes[i];
-			var prop = item.property;
-			var oldKeyIndex = item.keyIndex;
+		for (var g = 0; g < groupedProps.length; g++) {
+			var group = groupedProps[g];
+			var prop = group.prop;
+			var keys = group.keys;
 
-			// Calculate target time for this specific property
-			var targetTime = rootTime;
-			try {
-				for (var j = 0; j < item.layerChain.length; j++) {
-					var layer = item.layerChain[j];
-					targetTime = (targetTime - layer.startTime) * (100 / layer.stretch);
-				}
-			} catch (e) {
-				failCount++;
-				details += "Layer Calc Error: " + e.message + "; ";
-				continue;
+			keys.sort(function (a, b) { return b.oldKeyIndex - a.oldKeyIndex; });
+
+			for (var k = 0; k < keys.length; k++) {
+				try {
+					prop.removeKey(keys[k].oldKeyIndex);
+				} catch (e) { }
 			}
 
-			// Perform the move
-			var res = moveKeyframe(prop, oldKeyIndex, targetTime);
-			if (res.success) {
-				successCount++;
-			} else {
-				failCount++;
-				details += "Prop " + prop.name + ": " + res.reason + "; ";
+			keys.sort(function (a, b) { return a.newLocalTime - b.newLocalTime; });
+
+			for (var k = 0; k < keys.length; k++) {
+				try {
+					applyKeyframeData(prop, keys[k]);
+					successCount++;
+				} catch (e) {
+					failCount++;
+					details += "AddError " + prop.name + "; ";
+				}
 			}
 		}
 
-		g_storedKeyframes = []; // Clear after move
+		g_storedKeyframes = [];
 		app.endUndoGroup();
 
 		if (successCount > 0) {
@@ -248,75 +333,55 @@ function moveKeyframesToCurrentTime() {
 	}
 }
 
-function moveKeyframe(prop, keyIndex, newTime) {
+function extractKeyframeData(prop, keyIndex) {
 	try {
-		// Validations
-		if (!prop.canVaryOverTime) return { success: false, reason: "Not time-variant" };
-		if (keyIndex < 1 || keyIndex > prop.numKeys) return { success: false, reason: "Invalid Index " + keyIndex + "/" + prop.numKeys };
+		var data = {};
+		data.value = prop.keyValue(keyIndex);
 
-		// 1. Get all attributes
-		var value;
-		try {
-			value = prop.keyValue(keyIndex);
-		} catch (e) {
-			return { success: false, reason: "keyValue failed" };
-		}
+		data.inTempEase = prop.keyInTemporalEase(keyIndex);
+		data.outTempEase = prop.keyOutTemporalEase(keyIndex);
+		data.inInterp = prop.keyInInterpolationType(keyIndex);
+		data.outInterp = prop.keyOutInterpolationType(keyIndex);
+		data.tempCont = prop.keyTemporalContinuous(keyIndex);
+		data.tempAuto = prop.keyTemporalAutoBezier(keyIndex);
 
-		var inTempEase = prop.keyInTemporalEase(keyIndex);
-		var outTempEase = prop.keyOutTemporalEase(keyIndex);
-		var inInterp = prop.keyInInterpolationType(keyIndex);
-		var outInterp = prop.keyOutInterpolationType(keyIndex);
-		var tempCont = prop.keyTemporalContinuous(keyIndex);
-		var tempAuto = prop.keyTemporalAutoBezier(keyIndex);
-
-		var inSpat = null, outSpat = null, spatAuto = false, spatCont = false, roving = false;
 		var isSpatial = (prop.propertyValueType === PropertyValueType.TwoD_SPATIAL || prop.propertyValueType === PropertyValueType.ThreeD_SPATIAL);
+		data.isSpatial = isSpatial;
 
 		if (isSpatial) {
-			inSpat = prop.keyInSpatialTangent(keyIndex);
-			outSpat = prop.keyOutSpatialTangent(keyIndex);
-			spatAuto = prop.keySpatialAutoBezier(keyIndex);
-			spatCont = prop.keySpatialContinuous(keyIndex);
-			try { roving = prop.keyRoving(keyIndex); } catch (e) { }
+			data.inSpat = prop.keyInSpatialTangent(keyIndex);
+			data.outSpat = prop.keyOutSpatialTangent(keyIndex);
+			data.spatAuto = prop.keySpatialAutoBezier(keyIndex);
+			data.spatCont = prop.keySpatialContinuous(keyIndex);
+			try { data.roving = prop.keyRoving(keyIndex); } catch (e) { data.roving = false; }
 		}
-
-		// 2. Remove old key
-
-		// If newTime is exactly same loop, do nothing but report success
-		if (Math.abs(prop.keyTime(keyIndex) - newTime) < 0.0001) return { success: true };
-
-		prop.removeKey(keyIndex);
-
-		// 3. Add new key
-		var newKeyIndex = prop.addKey(newTime);
-
-		if (value !== null) prop.setValueAtKey(newKeyIndex, value);
-
-		// Restore attributes
-		if (inTempEase && outTempEase) prop.setTemporalEaseAtKey(newKeyIndex, inTempEase, outTempEase);
-		prop.setInterpolationTypeAtKey(newKeyIndex, inInterp, outInterp);
-
-		if (isSpatial) {
-			if (inSpat && outSpat) {
-				prop.setSpatialTangentsAtKey(newKeyIndex, inSpat, outSpat);
-			}
-			prop.setSpatialAutoBezierAtKey(newKeyIndex, spatAuto);
-			prop.setSpatialContinuousAtKey(newKeyIndex, spatCont);
-			try { prop.setRovingAtKey(newKeyIndex, roving); } catch (e) { }
-		}
-
-		prop.setTemporalContinuousAtKey(newKeyIndex, tempCont);
-
-		prop.setTemporalAutoBezierAtKey(newKeyIndex, tempAuto);
-
-		return { success: true };
+		return data;
 	} catch (e) {
-		return { success: false, reason: e.toString() };
+		return null;
 	}
 }
 
+function applyKeyframeData(prop, data) {
+	var newKeyIndex = prop.addKey(data.newLocalTime);
+	if (data.value !== null) prop.setValueAtKey(newKeyIndex, data.value);
 
-function removeKeyframesAtCurrentTime() {
+	if (data.inTempEase && data.outTempEase) prop.setTemporalEaseAtKey(newKeyIndex, data.inTempEase, data.outTempEase);
+	prop.setInterpolationTypeAtKey(newKeyIndex, data.inInterp, data.outInterp);
+
+	if (data.isSpatial) {
+		if (data.inSpat && data.outSpat) {
+			prop.setSpatialTangentsAtKey(newKeyIndex, data.inSpat, data.outSpat);
+		}
+		prop.setSpatialAutoBezierAtKey(newKeyIndex, data.spatAuto);
+		prop.setSpatialContinuousAtKey(newKeyIndex, data.spatCont);
+		try { prop.setRovingAtKey(newKeyIndex, data.roving); } catch (e) { }
+	}
+
+	prop.setTemporalContinuousAtKey(newKeyIndex, data.tempCont);
+	prop.setTemporalAutoBezierAtKey(newKeyIndex, data.tempAuto);
+}
+
+function removeKeyframesAtCurrentTime(isShift) {
 	var undoName = "Remove Keyframes at Current Time";
 	var comp = app.project.activeItem;
 	if (!comp || !(comp instanceof CompItem)) {
@@ -327,7 +392,7 @@ function removeKeyframesAtCurrentTime() {
 
 	try {
 		var counter = { count: 0 };
-		removeKeysRecursive(comp, comp.time, counter);
+		removeKeysRecursive(comp, comp.time, counter, isShift);
 
 		if (counter.count > 0) {
 			// Undoグループを閉じるには正常終了後に閉じる必要があるが、
@@ -347,12 +412,12 @@ function removeKeyframesAtCurrentTime() {
 	}
 }
 
-function removeKeysRecursive(comp, time, counter) {
+function removeKeysRecursive(comp, time, counter, isShift) {
 	for (var i = 1; i <= comp.numLayers; i++) {
 		var layer = comp.layer(i);
 
 		// 現在のレイヤーのプロパティからキーを削除
-		removeKeysFromLayer(layer, time, counter);
+		removeKeysFromLayer(layer, time, counter, isShift);
 
 		// If it's a pre-comp, recurse
 		if (layer.source instanceof CompItem) {
@@ -362,7 +427,7 @@ function removeKeysRecursive(comp, time, counter) {
 				var trProp = layer.property("Time Remap");
 				if (trProp) {
 					var mappedTime = trProp.valueAtTime(time, false);
-					removeKeysRecursive(layer.source, mappedTime, counter);
+					removeKeysRecursive(layer.source, mappedTime, counter, isShift);
 				}
 			} else {
 				// 通常の時間計算
@@ -373,13 +438,13 @@ function removeKeysRecursive(comp, time, counter) {
 				// But formula is specific.
 				// Correct formula: (time - layer.startTime) * (100 / layer.stretch)
 				var localTime = (time - layer.startTime) * (100 / layer.stretch);
-				removeKeysRecursive(layer.source, localTime, counter);
+				removeKeysRecursive(layer.source, localTime, counter, isShift);
 			}
 		}
 	}
 }
 
-function removeKeysFromLayer(propGroup, time, counter) {
+function removeKeysFromLayer(propGroup, time, counter, isShift) {
 	var numProps = propGroup.numProperties;
 	if (!numProps) return;
 
@@ -388,24 +453,29 @@ function removeKeysFromLayer(propGroup, time, counter) {
 
 		if (prop.propertyType === PropertyType.PROPERTY) {
 			if (prop.numKeys > 0) {
-				// nearestKeyIndex returns index of key closest to time
-				var nearestIndex = prop.nearestKeyIndex(time);
+				if (isShift) {
+					for (var k = prop.numKeys; k >= 1; k--) {
+						var keyTime = prop.keyTime(k);
+						if (keyTime >= time - 0.0001) {
+							prop.removeKey(k);
+							counter.count++;
+						}
+					}
+				} else {
+					var nearestIndex = prop.nearestKeyIndex(time);
 
-				// nearestKeyIndex can return 0 if no keys, but numKeys > 0 checked above.
-				// It returns a valid index 1..numKeys
-				if (nearestIndex > 0 && nearestIndex <= prop.numKeys) {
-					var keyTime = prop.keyTime(nearestIndex);
+					if (nearestIndex > 0 && nearestIndex <= prop.numKeys) {
+						var keyTime = prop.keyTime(nearestIndex);
 
-					// Floating point tolerance
-					if (Math.abs(keyTime - time) < 0.0001) {
-						prop.removeKey(nearestIndex);
-						counter.count++;
-						// 同じ時間に重複キーは存在しないはずなので、このプロパティでの削除は完了
+						if (Math.abs(keyTime - time) < 0.0001) {
+							prop.removeKey(nearestIndex);
+							counter.count++;
+						}
 					}
 				}
 			}
 		} else if (prop.propertyType === PropertyType.NAMED_GROUP || prop.propertyType === PropertyType.INDEXED_GROUP) {
-			removeKeysFromLayer(prop, time, counter);
+			removeKeysFromLayer(prop, time, counter, isShift);
 		}
 	}
 }

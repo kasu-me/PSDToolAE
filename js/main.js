@@ -30,7 +30,8 @@ document.getElementById('btn-delete-keys').addEventListener('click', removeKeyfr
 var btnMoveKeys = document.getElementById('btn-move-keys');
 if (btnMoveKeys) btnMoveKeys.disabled = true;
 
-function getKeyframesFromActiveComp() {
+function getKeyframesFromActiveComp(e) {
+	var isShift = e && e.shiftKey ? true : false;
 	var statusDiv = document.getElementById('status-keyframe');
 	statusDiv.textContent = "取得中...";
 	statusDiv.style.color = "#eeeeee";
@@ -38,7 +39,7 @@ function getKeyframesFromActiveComp() {
 
 	if (btnMoveKeys) btnMoveKeys.disabled = true;
 
-	csInterface.evalScript('getKeyframesFromActiveComp()', function (res) {
+	csInterface.evalScript('getKeyframesFromActiveComp(' + isShift + ')', function (res) {
 		if (res === "true") {
 			statusDiv.textContent = "キーフレームを記録しました";
 			statusDiv.style.color = "#4CAF50"; // 柔らかめの緑
@@ -87,8 +88,10 @@ function moveKeyframesToCurrentTime() {
 		}
 	});
 }
-function removeKeyframesAtCurrentTime() {
-	if (!confirm("現在の時間にあるキーフレームを全階層から削除しますか？")) {
+function removeKeyframesAtCurrentTime(e) {
+	var isShift = e && e.shiftKey ? true : false;
+	var msg = isShift ? "現在の時間以降すべてのキーフレームを全階層から削除しますか？" : "現在の時間にあるキーフレームを全階層から削除しますか？";
+	if (!confirm(msg)) {
 		return;
 	}
 
@@ -97,7 +100,7 @@ function removeKeyframesAtCurrentTime() {
 	statusDiv.style.color = "#eeeeee";
 	statusDiv.style.fontWeight = "normal";
 
-	csInterface.evalScript('removeKeyframesAtCurrentTime()', function (res) {
+	csInterface.evalScript('removeKeyframesAtCurrentTime(' + isShift + ')', function (res) {
 		var resultObj = { count: 0, status: "false" };
 		try {
 			if (res.startsWith("{")) {
