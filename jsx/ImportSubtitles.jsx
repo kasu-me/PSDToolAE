@@ -2,11 +2,25 @@
 	// UIの構築
 	function buildUI(thisObj) {
 		var panel = (thisObj instanceof Panel) ? thisObj : new Window("palette", "字幕自動反映", undefined, { resizeable: true });
+		panel.alignChildren = ["left", "top"];
+
+		var regexGroup = panel.add("group");
+		regexGroup.add("statictext", undefined, "抽出正規表現:");
+		var regexInput = regexGroup.add("edittext", undefined, ".*-.*-(.*)-.*");
+		regexInput.characters = 20;
+
 		var btn = panel.add("button", undefined, "テキスト反映");
 
 		btn.onClick = function () {
+			try {
+				new RegExp(regexInput.text);
+			} catch (e) {
+				alert("入力された正規表現が正しくありません。\nエラー: " + e.message);
+				return;
+			}
+
 			app.beginUndoGroup("テキストを反映");
-			processSelectedLayers();
+			processSelectedLayers(regexInput.text);
 			app.endUndoGroup();
 		};
 
@@ -15,7 +29,7 @@
 	}
 
 	// 実際の処理
-	function processSelectedLayers() {
+	function processSelectedLayers(regexString) {
 		var comp = app.project.activeItem;
 		if (!comp || !(comp instanceof CompItem)) {
 			alert("コンポジションを選択してから実行してください。");
@@ -58,18 +72,20 @@
 			txtFile.close();
 
 			// ----------------------------------------------------
-			// 2. ファイル名から「BBBB」を抽出
+			// 2. ファイル名から文字列を抽出 (正規表現)
 			// ----------------------------------------------------
-			// 拡張子を除いたファイル名で分割する場合も考慮
+			// 拡張子を除いたファイル名で抽出する場合も考慮
 			var fileNameWithoutExt = fileName.substring(0, fileName.lastIndexOf("."));
-			var nameParts = fileNameWithoutExt.split("-");
 
-			// フォーマット通りでない場合はスキップ
-			if (nameParts.length < 3) {
+			var regex = new RegExp(regexString);
+			var match = fileNameWithoutExt.match(regex);
+
+			// 正規表現にマッチしない、またはキャプチャグループ（抽出対象）がない場合はスキップ
+			if (!match || match.length < 2) {
 				continue;
 			}
 
-			var targetPrefix = nameParts[2]; // 例: BBBB
+			var targetPrefix = match[1]; // 例: BBBB
 
 			// ----------------------------------------------------
 			// 3. 対象のテキストレイヤーを検索してキーフレームを追加
