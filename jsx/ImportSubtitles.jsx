@@ -124,8 +124,17 @@
 			var sourceTextProp = layer.property('ADBE Text Properties').property('ADBE Text Document');
 			if (!sourceTextProp) continue;
 
-			if (sourceTextProp.numKeys > 0) {
-				// キーフレームが存在する場合：全キーフレームに適用
+			var selectedKeys = sourceTextProp.selectedKeys;
+			if (selectedKeys && selectedKeys.length > 0) {
+				// 選択されたキーフレームにのみ適用
+				for (var k = 0; k < selectedKeys.length; k++) {
+					var keyIndex = selectedKeys[k];
+					var textDoc = sourceTextProp.keyValue(keyIndex);
+					textDoc = applyBudouxWithDoc(textDoc);
+					sourceTextProp.setValueAtKey(keyIndex, textDoc);
+				}
+			} else if (sourceTextProp.numKeys > 0) {
+				// キーフレームが存在するが未選択の場合：全キーフレームに適用
 				for (var k = 1; k <= sourceTextProp.numKeys; k++) {
 					var textDoc = sourceTextProp.keyValue(k);
 					textDoc = applyBudouxWithDoc(textDoc);
