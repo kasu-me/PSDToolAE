@@ -273,7 +273,10 @@
 				textDoc.text = textContent;
 
 				// インポイントの時間をフレームぴったりの位置に合わせる（スナップ）
-				var snappedTime = Math.round(layer.inPoint / comp.frameDuration) * comp.frameDuration;
+				// Math.round で整数フレーム番号を確定してから掛け算し、
+				// 浮動小数点誤差を 1e-6（マイクロ秒精度）で丸めて確実にフレーム境界に乗せる
+				var frameIndex = Math.round(layer.inPoint / comp.frameDuration);
+				var snappedTime = Math.round(frameIndex * comp.frameDuration * 1000000) / 1000000;
 
 				// 音声レイヤーのインポイント(開始時間)にキーフレームを追加
 				sourceTextProp.setValueAtTime(snappedTime, textDoc);
